@@ -2,8 +2,8 @@ package org.codejargon.feather;
 
 import org.junit.Test;
 
-import javax.inject.Inject;
-import javax.inject.Provider;
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
 
 import static org.junit.Assert.assertNotNull;
 

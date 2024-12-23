@@ -1,6 +1,6 @@
 package org.codejargon.feather;
 
-import javax.inject.Named;
+import jakarta.inject.Named;
 import java.lang.annotation.Annotation;
 
 public class Key<T> {

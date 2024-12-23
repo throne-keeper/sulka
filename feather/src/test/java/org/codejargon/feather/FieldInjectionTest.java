@@ -2,7 +2,7 @@ package org.codejargon.feather;
 
 import org.junit.Test;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import static org.junit.Assert.assertNotNull;
 

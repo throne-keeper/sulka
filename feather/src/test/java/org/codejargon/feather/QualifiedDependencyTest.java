@@ -2,8 +2,8 @@ package org.codejargon.feather;
 
 import org.junit.Test;
 
-import javax.inject.Inject;
-import javax.inject.Qualifier;
+import jakarta.inject.Inject;
+import jakarta.inject.Qualifier;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 

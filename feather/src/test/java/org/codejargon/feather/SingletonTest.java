@@ -2,8 +2,8 @@ package org.codejargon.feather;
 
 import org.junit.Test;
 
-import javax.inject.Provider;
-import javax.inject.Singleton;
+import jakarta.inject.Provider;
+import jakarta.inject.Singleton;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;

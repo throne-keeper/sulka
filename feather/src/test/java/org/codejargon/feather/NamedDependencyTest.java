@@ -2,7 +2,7 @@ package org.codejargon.feather;
 
 import org.junit.Test;
 
-import javax.inject.Named;
+import jakarta.inject.Named;
 
 import static org.junit.Assert.assertEquals;
 

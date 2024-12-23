@@ -1,15 +1,15 @@
 package org.codejargon.feather;
 
-import javax.inject.*;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.*;
+import jakarta.inject.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Feather {
     private final Map<Key, Provider<?>> providers = new ConcurrentHashMap<>();
     private final Map<Key, Object> singletons = new ConcurrentHashMap<>();
-    private final Map<Class, Object[][]> injectFields = new ConcurrentHashMap<>(0);
+    private final Map<Class<?>, Object[][]> injectFields = new ConcurrentHashMap<>(0);
 
     /**
      * Constructs Feather with configuration modules
