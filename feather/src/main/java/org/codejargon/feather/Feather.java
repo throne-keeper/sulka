@@ -1,9 +1,23 @@
 package org.codejargon.feather;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.*;
-import jakarta.inject.*;
-import java.util.*;
+
+import jakarta.inject.Inject;
+import jakarta.inject.Provider;
+import jakarta.inject.Qualifier;
+import jakarta.inject.Singleton;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Feather {
@@ -26,16 +40,10 @@ public class Feather {
     }
 
     private Feather(Iterable<?> modules) {
-        providers.put(Key.of(Feather.class), new Provider() {
-                    @Override
-                    public Object get() {
-                        return this;
-                    }
-                }
-        );
+        providers.put(Key.of(Feather.class), () -> this);
         for (final Object module : modules) {
-            if (module instanceof Class) {
-                throw new FeatherException(String.format("%s provided as class instead of an instance.", ((Class) module).getName()));
+            if (module instanceof Class<?> clazz) {
+                throw new FeatherException(String.format("%s provided as class instead of an instance.", clazz.getName()));
             }
             for (Method providerMethod : providers(module.getClass())) {
                 providerMethod(module, providerMethod);
@@ -92,18 +100,15 @@ public class Feather {
     @SuppressWarnings("unchecked")
     private <T> Provider<T> provider(final Key<T> key, Set<Key> chain) {
         if (!providers.containsKey(key)) {
-            final Constructor constructor = constructor(key);
+            final Constructor<T> constructor = constructor(key);
             final Provider<?>[] paramProviders = paramProviders(key, constructor.getParameterTypes(), constructor.getGenericParameterTypes(), constructor.getParameterAnnotations(), chain);
-            providers.put(key, singletonProvider(key, key.type.getAnnotation(Singleton.class), new Provider() {
-                        @Override
-                        public Object get() {
-                            try {
-                                return constructor.newInstance(params(paramProviders));
-                            } catch (Exception e) {
-                                throw new FeatherException(String.format("Can't instantiate %s", key.toString()), e);
-                            }
-                        }
-                    })
+            providers.put(key, singletonProvider(key, key.type.getAnnotation(Singleton.class), (Provider) () -> {
+                try {
+                    return constructor.newInstance(params(paramProviders));
+                } catch (Exception e) {
+                    throw new FeatherException(String.format("Can't instantiate %s", key.toString()), e);
+                }
+            })
             );
         }
         return (Provider<T>) providers.get(key);
@@ -122,44 +127,33 @@ public class Feather {
                 m.getParameterAnnotations(),
                 Collections.singleton(key)
         );
-        providers.put(key, singletonProvider(key, singleton, new Provider() {
-                            @Override
-                            public Object get() {
-                                try {
-                                    return m.invoke(module, params(paramProviders));
-                                } catch (Exception e) {
-                                    throw new FeatherException(String.format("Can't instantiate %s with provider", key.toString()), e);
-                                }
-                            }
-                        }
+        providers.put(key, singletonProvider(key, singleton, (Provider) () -> {
+            try {
+                return m.invoke(module, params(paramProviders));
+            } catch (Exception e) {
+                throw new FeatherException(String.format("Can't instantiate %s with provider", key.toString()), e);
+            }
+        }
                 )
         );
     }
 
     @SuppressWarnings("unchecked")
     private <T> Provider<T> singletonProvider(final Key key, Singleton singleton, final Provider<T> provider) {
-        return singleton != null ? new Provider<T>() {
-            @Override
-            public T get() {
-                if (!singletons.containsKey(key)) {
-                    synchronized (singletons) {
-                        if (!singletons.containsKey(key)) {
-                            singletons.put(key, provider.get());
-                        }
+        return singleton != null ? () -> {
+            if (!singletons.containsKey(key)) {
+                synchronized (singletons) {
+                    if (!singletons.containsKey(key)) {
+                        singletons.put(key, provider.get());
                     }
                 }
-                return (T) singletons.get(key);
             }
+            return (T) singletons.get(key);
         } : provider;
     }
 
-    private Provider<?>[] paramProviders(
-            final Key key,
-            Class<?>[] parameterClasses,
-            Type[] parameterTypes,
-            Annotation[][] annotations,
-            final Set<Key> chain
-    ) {
+    private Provider<?>[] paramProviders(final Key key, Class<?>[] parameterClasses, Type[] parameterTypes,
+                                         Annotation[][] annotations, final Set<Key> chain) {
         Provider<?>[] providers = new Provider<?>[parameterTypes.length];
         for (int i = 0; i < parameterTypes.length; ++i) {
             Class<?> parameterClass = parameterClasses[i];
@@ -173,20 +167,10 @@ public class Feather {
                 if (newChain.contains(newKey)) {
                     throw new FeatherException(String.format("Circular dependency: %s", chain(newChain, newKey)));
                 }
-                providers[i] = new Provider() {
-                    @Override
-                    public Object get() {
-                        return provider(newKey, newChain).get();
-                    }
-                };
+                providers[i] = (Provider) () -> provider(newKey, newChain).get();
             } else {
                 final Key newKey = Key.of(providerType, qualifier);
-                providers[i] = new Provider() {
-                    @Override
-                    public Object get() {
-                        return provider(newKey, null);
-                    }
-                };
+                providers[i] = (Provider) () -> provider(newKey, null);
             }
         }
         return providers;
@@ -215,8 +199,8 @@ public class Feather {
         Object[][] fs = new Object[fields.size()][];
         int i = 0;
         for (Field f : fields) {
-            Class<?> providerType = f.getType().equals(Provider.class) ?
-                    (Class<?>) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0] :
+            Class providerType = f.getType().equals(Provider.class) ?
+                    (Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0] :
                     null;
             fs[i++] = new Object[]{
                     f,
