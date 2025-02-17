@@ -21,8 +21,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Feather {
-    private final Map<Key, Provider<?>> providers = new ConcurrentHashMap<>();
-    private final Map<Key, Object> singletons = new ConcurrentHashMap<>();
+    private final Map<Key<?>, Provider<?>> providers = new ConcurrentHashMap<>();
+    private final Map<Key<?>, Object> singletons = new ConcurrentHashMap<>();
     private final Map<Class<?>, Object[][]> injectFields = new ConcurrentHashMap<>(0);
 
     /**
@@ -88,7 +88,9 @@ public class Feather {
         }
         for (Object[] f: injectFields.get(target.getClass())) {
             Field field = (Field) f[0];
-            Key key = (Key) f[2];
+
+            @SuppressWarnings("unchecked")
+            Key<Object> key = (Key<Object>) f[2];
             try {
                 field.set(target, (boolean) f[1] ? provider(key) : instance(key));
             } catch (Exception e) {
@@ -98,11 +100,11 @@ public class Feather {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> Provider<T> provider(final Key<T> key, Set<Key> chain) {
+    private <T> Provider<T> provider(final Key<T> key, Set<Key<?>> chain) {
         if (!providers.containsKey(key)) {
             final Constructor<T> constructor = constructor(key);
             final Provider<?>[] paramProviders = paramProviders(key, constructor.getParameterTypes(), constructor.getGenericParameterTypes(), constructor.getParameterAnnotations(), chain);
-            providers.put(key, singletonProvider(key, key.type.getAnnotation(Singleton.class), (Provider) () -> {
+            providers.put(key, singletonProvider(key, key.type.getAnnotation(Singleton.class), (Provider<?>) () -> {
                 try {
                     return constructor.newInstance(params(paramProviders));
                 } catch (Exception e) {
@@ -153,7 +155,7 @@ public class Feather {
     }
 
     private Provider<?>[] paramProviders(final Key key, Class<?>[] parameterClasses, Type[] parameterTypes,
-                                         Annotation[][] annotations, final Set<Key> chain) {
+                                         Annotation[][] annotations, final Set<Key<?>> chain) {
         Provider<?>[] providers = new Provider<?>[parameterTypes.length];
         for (int i = 0; i < parameterTypes.length; ++i) {
             Class<?> parameterClass = parameterClasses[i];
@@ -162,8 +164,8 @@ public class Feather {
                     (Class<?>) ((ParameterizedType) parameterTypes[i]).getActualTypeArguments()[0] :
                     null;
             if (providerType == null) {
-                final Key newKey = Key.of(parameterClass, qualifier);
-                final Set<Key> newChain = append(chain, key);
+                final Key<?> newKey = Key.of(parameterClass, qualifier);
+                final Set<Key<?>> newChain = append(chain, key);
                 if (newChain.contains(newKey)) {
                     throw new FeatherException(String.format("Circular dependency: %s", chain(newChain, newKey)));
                 }
@@ -184,9 +186,9 @@ public class Feather {
         return params;
     }
 
-    private static Set<Key> append(Set<Key> set, Key newKey) {
+    private static Set<Key<?>> append(Set<Key<?>> set, Key<?> newKey) {
         if (set != null && !set.isEmpty()) {
-            Set<Key> appended = new LinkedHashSet<>(set);
+            Set<Key<?>> appended = new LinkedHashSet<>(set);
             appended.add(newKey);
             return appended;
         } else {
@@ -199,14 +201,14 @@ public class Feather {
         Object[][] fs = new Object[fields.size()][];
         int i = 0;
         for (Field f : fields) {
-            Class providerType = f.getType().equals(Provider.class) ?
-                    (Class) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0] :
+            Class<Object> providerType = f.getType().equals(Provider.class) ?
+                    (Class<Object>) ((ParameterizedType) f.getGenericType()).getActualTypeArguments()[0] :
                     null;
-            fs[i++] = new Object[]{
-                    f,
-                    providerType != null,
-                    Key.of(providerType != null ? providerType : f.getType(), qualifier(f.getAnnotations()))
-            };
+            Class<?> prov = (providerType != null) ? providerType : f.getType();
+            boolean isProviderTypeNonNull = (providerType != null);
+            fs[i++] = new Object[] { f, isProviderTypeNonNull, Key.of(prov), qualifier(f.getAnnotations()) };
+//            fs[i++] = new Object[]{f, providerType != null, Key.of(providerType != null ? providerType : f.getType(), qualifier(f.getAnnotations()))
+//            };
         }
         return fs;
     }
@@ -226,9 +228,9 @@ public class Feather {
         return fields;
     }
 
-    private static String chain(Set<Key> chain, Key lastKey) {
+    private static String chain(Set<Key<?>> chain, Key<?> lastKey) {
         StringBuilder chainString = new StringBuilder();
-        for (Key key : chain) {
+        for (Key<?> key : chain) {
             chainString.append(key.toString()).append(" -> ");
         }
         return chainString.append(lastKey.toString()).toString();
